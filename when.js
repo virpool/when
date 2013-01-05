@@ -35,6 +35,33 @@ define(function () {
 
 	when.isPromise = isPromise; // Determine if a thing is a promise
 
+	when.nearest     = nearest;
+	when.isPending   = isPending;
+	when.isFulfilled = isFulfilled;
+	when.isRejected  = isRejected;
+
+	function nearest(it) {
+		return isPromise(it) ? _nearest(it) : it;
+	}
+
+	function _nearest(promise) {
+		return typeof promise.nearest === 'function' ? promise.nearest() : promise;
+	}
+
+	function isPending(it) {
+		return !isFulfilled(it) && !isRejected(it);
+		// or this?
+		// return isPromise(it) && it === it.nearest();
+	}
+
+	function isFulfilled(it) {
+		return !isPromise(it) || 'value' in _nearest(it);
+	}
+
+	function isRejected(it) {
+		return isPromise(it) && 'reason' in _nearest(it);
+	}
+
 	/**
 	 * Register an observer for a promise or immediate value.
 	 *
@@ -122,11 +149,12 @@ define(function () {
 	 * @constructor
 	 * @name Promise
 	 */
-	function Promise(then) {
-		this.then = then;
-	}
+	function Promise() {}
 
 	Promise.prototype = {
+		nearest: function() {
+			return this;
+		},
 		/**
 		 * Register a callback that will be called when a promise is
 		 * fulfilled or rejected.  Optionally also register a progress handler.
@@ -187,15 +215,23 @@ define(function () {
 	 * @return {Promise} fulfilled promise
 	 */
 	function fulfilled(value) {
-		var p = new Promise(function(onFulfilled) {
+		var promise;
+
+		promise = new Promise();
+		promise.value = value;
+		promise.nearest = function() {
+			return promise;
+		};
+
+		promise.then = function(onFulfilled) {
 			try {
 				return resolve(typeof onFulfilled == 'function' ? onFulfilled(value) : value);
 			} catch(e) {
 				return rejected(e);
 			}
-		});
+		};
 
-		return p;
+		return promise;
 	}
 
 	/**
@@ -207,15 +243,23 @@ define(function () {
 	 * @return {Promise} rejected promise
 	 */
 	function rejected(reason) {
-		var p = new Promise(function(_, onRejected) {
+		var promise;
+
+		promise = new Promise();
+		promise.reason = reason;
+		promise.nearest = function() {
+			return promise;
+		};
+
+		promise.then = function(_, onRejected) {
 			try {
 				return resolve(typeof onRejected == 'function' ? onRejected(reason) : rejected(reason));
 			} catch(e) {
 				return rejected(e);
 			}
-		});
+		};
 
-		return p;
+		return promise;
 	}
 
 	/**
@@ -229,13 +273,17 @@ define(function () {
 	 */
 	function defer() {
 		var deferred, promise, handlers, progressHandlers,
-			_then, _progress, _resolve;
+			_then, _progress, _resolve, _nearest;
 
 		/**
 		 * The promise for the new deferred
 		 * @type {Promise}
 		 */
-		promise = new Promise(then);
+		promise = new Promise();
+		promise.then = then;
+		promise.nearest = function() {
+			return _nearest();
+		};
 
 		/**
 		 * The full Deferred object, with {@link Promise} and {@link Resolver} parts
@@ -260,6 +308,16 @@ define(function () {
 
 		handlers = [];
 		progressHandlers = [];
+
+		/**
+		 * Return the underlying promise that is "nearest" to the eventual
+		 * fulfillment value.
+		 * @return {Promise}
+		 * @private
+		 */
+		_nearest = function() {
+			return promise;
+		};
 
 		/**
 		 * Pre-resolution then() that adds the supplied callback, errback, and progback
@@ -315,6 +373,9 @@ define(function () {
 		 */
 		_resolve = function(value) {
 			value = resolve(value);
+
+			// Switch to returning the next nearest promise
+			_nearest = value.nearest;
 
 			// Replace _then with one that directly notifies with the result.
 			_then = value.then;

@@ -9,12 +9,12 @@
 Include the following header, with MIT license, copyright, brief module description, and your contact information as the `@author`.
 
 ```text
-/** @license MIT License (c) Copyright original author or authors */
+/** @license MIT License (c) Copyright 2010-2013 original author or authors */
 
 /**
  * <module name>
  *
- * <Brief module description>
+ * <1-2 sentence module description>
  *
  * @author <your name> <your email>
  */

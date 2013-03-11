@@ -27,8 +27,7 @@
 		}
 	],
 	"devDependencies": {
-		"buster": "~0.6",
-		"jshint": "~1.1",
+		"test-support": "~0.1",
 		"promises-aplus-tests": "~1"
 	},
 	"main": "when",
@@ -37,6 +36,7 @@
 	},
 	"scripts": {
 		"test": "jshint . && buster test -e node && promises-aplus-tests test/when-adapter.js",
+		"ci": "npm test && sauceme",
 		"start": "buster server",
 		"test-browser": "jshint *.js && buster test -e browser"
 	}

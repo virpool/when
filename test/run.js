@@ -3,9 +3,13 @@
 
 	define('when/test/run', ['curl/_privileged', 'domReady!'], function (curl) {
 
-		var modules = Object.keys(curl.cache).filter(function (moduleId) {
-			return moduleId.indexOf('-test') > 0;
-		});
+		var modules = [], moduleId;
+
+		for (moduleId in curl.cache) {
+			if (moduleId.indexOf('-test') > 0) {
+				modules.push(moduleId);
+			}
+		}
 
 		buster.testRunner.timeout = 5000;
 		define('when/test/run-faux', modules, function () {

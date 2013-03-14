@@ -1,7 +1,7 @@
-(function (buster, define) {
+(function (buster, require) {
 	'use strict';
 
-	define('when/test/run', ['curl/_privileged', 'domReady!'], function (curl) {
+	require(['curl/_privileged', 'domReady!'], function (curl) {
 
 		var modules = [], moduleId;
 
@@ -12,14 +12,13 @@
 		}
 
 		buster.testRunner.timeout = 5000;
-		define('when/test/run-faux', modules, function () {
+		require(modules, function () {
 			buster.run();
 		});
 
 	});
 
 }(
-	this.buster || require('buster'),
-	typeof define === 'function' && define.amd ? define : function (factory) { module.exports = factory(require); }
-	// Boilerplate for AMD and Node
+	this.buster,
+	this.curl
 ));

@@ -296,6 +296,81 @@ define(function () {
 		}
 	}
 
+	when.lazy = lazy;
+	function lazy(resolver) {
+		var value, started, handlers = [];
+
+		// Return the promise
+		return new Promise(then);
+
+		/**
+		 * Register handlers for this promise.
+		 * @param [onFulfilled] {Function} fulfillment handler
+		 * @param [onRejected] {Function} rejection handler
+		 * @param [onProgress] {Function} progress handler
+		 * @return {Promise} new Promise
+		 */
+		function then(onFulfilled, onRejected, onProgress) {
+			// Call the provider resolver to seal the promise's fate
+			if(!started) {
+				started = true;
+				try {
+					resolver(promiseResolve, promiseReject, promiseNotify);
+				} catch(e) {
+					promiseReject(e);
+				}
+			}
+
+			return promise(function(resolve, reject, notify) {
+				handlers
+					// Call handlers later, after resolution
+					? handlers.push(function(value) {
+					value.then(onFulfilled, onRejected, onProgress)
+						.then(resolve, reject, notify);
+				})
+					// Call handlers soon, but not in the current stack
+					: enqueue(function() {
+					value.then(onFulfilled, onRejected, onProgress)
+						.then(resolve, reject, notify);
+				});
+			});
+		}
+
+		/**
+		 * Transition from pre-resolution state to post-resolution state, notifying
+		 * all listeners of the ultimate fulfillment or rejection
+		 * @param {*|Promise} val resolution value
+		 */
+		function promiseResolve(val) {
+			if(!handlers) {
+				return;
+			}
+
+			value = coerce(val);
+			scheduleHandlers(handlers, value);
+
+			handlers = undef;
+		}
+
+		/**
+		 * Reject this promise with the supplied reason, which will be used verbatim.
+		 * @param {*} reason reason for the rejection
+		 */
+		function promiseReject(reason) {
+			promiseResolve(rejected(reason));
+		}
+
+		/**
+		 * Issue a progress event, notifying all progress listeners
+		 * @param {*} update progress event payload to pass to all listeners
+		 */
+		function promiseNotify(update) {
+			if(handlers) {
+				scheduleHandlers(handlers, progressing(update));
+			}
+		}
+	}
+
 	/**
 	 * Coerces x to a trusted Promise
 	 *

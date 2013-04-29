@@ -68,6 +68,8 @@ define(function () {
 	}
 
 	Promise.prototype = {
+		constructor: promise,
+
 		/**
 		 * Register a rejection handler.  Shortcut for .then(undefined, onRejected)
 		 * @param {function?} onRejected

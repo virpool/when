@@ -23,8 +23,7 @@ define(function() {
 			var cause, formatted;
 
 			formatted = {
-				promise: rec.promise,
-				reason: rec.reason && rec.reason.toString()
+				message: rec.reason && rec.reason.toString()
 			};
 
 			if(hasStackTraces) {
@@ -40,14 +39,12 @@ define(function() {
 		};
 
 		function formatStackJumps(rec) {
-			var parent, jumps;
+			var jumps = [];
 
-			jumps = [];
-			parent = rec.parent;
-
-			while (parent) {
-				jumps.push(formatStackJump(parent));
-				parent = parent.parent;
+			rec = rec.parent;
+			while (rec) {
+				jumps.push(formatStackJump(rec));
+				rec = rec.parent;
 			}
 
 			return jumps;

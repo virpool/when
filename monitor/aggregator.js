@@ -17,7 +17,7 @@ define(function() {
 			reset: reset,
 			report: report,
 			promisePending: promisePending,
-			promiseResolved: promiseResolved,
+			promiseFulfilled: promiseFulfilled,
 			unhandledRejection: unhandledRejection,
 			promiseObserved: promiseObserved
 		};
@@ -50,7 +50,7 @@ define(function() {
 			promises.push(rec);
 		}
 
-		function promiseResolved(promise) {
+		function promiseFulfilled(promise) {
 			removeFromList(promises, promise);
 			report();
 		}

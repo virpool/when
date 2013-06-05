@@ -314,12 +314,8 @@ define(function () {
 
 			if(!handled && monitor.unhandledRejection) {
 				value.then(
-					function() {
-						monitor.promiseResolved(self);
-					},
-					function () {
-						monitor.unhandledRejection(self, x);
-					}
+					function() { monitor.promiseFulfilled(self); },
+					function() { monitor.unhandledRejection(self, x); }
 				);
 			}
 		}

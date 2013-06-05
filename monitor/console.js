@@ -36,14 +36,16 @@ define(function(require) {
 	}
 
 	function mergePromiseFrames(/* frames */) {
-		return '  ...[promise implementation]...';
+		return '  ...[filtered frames]...';
 	}
 
 	function exclude(line) {
-		return excludeRx.test(line);
+		var rx = console.promiseStackFilter || excludeRx;
+		return rx.test(line);
 	}
 
 	function publish(aggregator, target) {
+		target.reportUnhandled = aggregator.report;
 		target.promisePending = aggregator.promisePending;
 		target.promiseResolved = aggregator.promiseResolved;
 		target.unhandledRejection = aggregator.unhandledRejection;

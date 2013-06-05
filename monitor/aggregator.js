@@ -26,19 +26,28 @@ define(function() {
 
 		return aggregator;
 
-		function promisePending(promise) {
-			var stackHolder;
+		function promisePending(promise, parent) {
+			var stackHolder, rec;
 			try {
 				throw new Error();
 			} catch(e) {
 				stackHolder = e;
 			}
 
-			promises.push({
+			rec = {
 				promise: promise,
 				timestamp: Date.now(),
 				createdAt: stackHolder
+			};
+
+			promises.some(function(p) {
+				if(p.promise === parent) {
+					rec.parent = p;
+					return true;
+				}
 			});
+
+			promises.push(rec);
 		}
 
 		function promiseResolved(promise) {

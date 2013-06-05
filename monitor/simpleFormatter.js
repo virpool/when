@@ -32,22 +32,42 @@ define(function() {
 				if(!cause) {
 					cause = rec.rejectedAt && rec.rejectedAt.stack;
 				}
-				formatted.stack = stitch(rec.createdAt.stack, cause);
+				var jumps = formatStackJumps(rec);
+				formatted.stack = stitch(rec.createdAt.stack, jumps, cause);
 			}
 
 			return formatted;
 		};
 
-		function stitch(escaped, rejected) {
+		function formatStackJumps(rec) {
+			var parent, jumps;
+
+			jumps = [];
+			parent = rec.parent;
+
+			while (parent) {
+				jumps.push(formatStackJump(parent));
+				parent = parent.parent;
+			}
+
+			return jumps;
+		}
+
+		function formatStackJump(rec) {
+			return filterStack(toArray(rec.createdAt.stack).slice(1));
+		}
+
+		function stitch(escaped, jumps, rejected) {
 			escaped = filterStack(toArray(escaped).slice(1));
 			rejected = filterStack(toArray(rejected));
 			return [unhandledMsg]
-				.concat(escaped, reasonMsg, rejected);
+				.concat(escaped, jumps, reasonMsg, rejected);
 		}
 
 		function toArray(stack) {
 			return stack.split('\n');
 		}
 	};
+
 });
 }(typeof define === 'function' && define.amd ? define : function(factory) { module.exports = factory(); }));

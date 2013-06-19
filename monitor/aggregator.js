@@ -7,10 +7,77 @@
  * @author: Brian Cavalier
  * @author: John Hann
  */
-(function(define) { 'use strict';
+(function(define) {
 define(function(require) {
 
-	var array = require('./array');
+	var array, hasStackTraces, generateStackTrace;
+
+	array = require('./array');
+
+	(function() {
+		var ANON, fnRE, maxStackSize;
+
+		ANON = '{anonymous}';
+		fnRE = /function\s*([\w\-$]+)?\s*\(/i;
+		maxStackSize = 10;
+
+		try {
+			throw new Error();
+		} catch (e) {
+			hasStackTraces = !!e.stack;
+
+			if(hasStackTraces) {
+				generateStackTrace = function(reason) {
+					try {
+						throw new Error(reason && reason.message || reason);
+					} catch (e) {
+						return e;
+					}
+				};
+			} else {
+				// arguments.caller-based stack synthesis derived
+				// from http://stacktracejs.com
+				generateStackTrace = function(reason) {
+					/*jshint noarg:false*/
+					var curr, stack, fn, args;
+
+					curr = arguments.callee.caller;
+					stack = [];
+
+					while (curr && stack.length < maxStackSize) {
+						fn = fnRE.test(curr.toString()) ? RegExp.$1 || ANON : ANON;
+						args = normalizeArgs(curr['arguments']);
+						stack.push(fn + '(' + args.join(', ') + ')');
+						curr = curr.caller;
+					}
+					return { stack: stack, message: reason && reason.message || reason };
+				};
+
+				function normalizeArgs(args) {
+					if(!args) {
+						return [];
+					}
+
+					var result, i, len, x;
+					result = [];
+					for(i = 0, len = args.length; i < len; i++) {
+						x = args[i];
+						if(typeof x === 'function') {
+							result.push((x.name ? x.name : ANON) + '(...)');
+						} else {
+							try {
+								result.push(JSON.stringify(x));
+							} catch(e) {
+								result.push(x);
+							}
+						}
+					}
+
+					return result;
+				}
+			}
+		}
+	}());
 
 	return function createAggregator(reporter) {
 		var promises;
@@ -21,11 +88,8 @@ define(function(require) {
 
 		function promisePending(promise, parent) {
 			var stackHolder, rec;
-			try {
-				throw new Error();
-			} catch(e) {
-				stackHolder = e;
-			}
+
+			stackHolder = generateStackTrace();
 
 			rec = {
 				promise: promise,
@@ -50,11 +114,8 @@ define(function(require) {
 
 		function unhandledRejection(promise, reason) {
 			var stackHolder;
-			try {
-				throw new Error(reason && reason.message || reason);
-			} catch(e) {
-				stackHolder = e;
-			}
+
+			stackHolder = generateStackTrace(reason);
 
 			array.some(promises, function(rec) {
 				if(promise === rec.promise) {

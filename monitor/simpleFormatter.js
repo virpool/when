@@ -20,7 +20,7 @@ define(function() {
 
 	return function(filterStack, unhandledMsg, reasonMsg) {
 		return function format(rec) {
-			var cause, formatted;
+			var cause, formatted, jumps;
 
 			formatted = {
 				reason: rec.reason,
@@ -29,12 +29,14 @@ define(function() {
 
 			if(hasStackTraces) {
 				cause = rec.reason && rec.reason.stack;
-				if(!cause) {
-					cause = rec.rejectedAt && rec.rejectedAt.stack;
-				}
-				var jumps = formatStackJumps(rec);
-				formatted.stack = stitch(rec.createdAt.stack, jumps, cause);
 			}
+
+			if(!cause) {
+				cause = rec.rejectedAt && rec.rejectedAt.stack;
+			}
+
+			jumps = formatStackJumps(rec);
+			formatted.stack = stitch(rec.createdAt.stack, jumps, cause);
 
 			return formatted;
 		};
@@ -63,7 +65,9 @@ define(function() {
 		}
 
 		function toArray(stack) {
-			return stack ? stack.split('\n') : [];
+			return stack
+				? (typeof stack === 'string' ? stack.split('\n') : stack)
+				: [];
 		}
 	};
 

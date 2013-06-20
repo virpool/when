@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-var fs, path, argv, glob, when, fn, nodefn, jsFiles, blacklist, dirs,
+var fs, path, pkg, argv, glob, when, fn, nodefn,
+	jsFilesRx, blacklistRx, dirs, name, main,
 	readFile, writeFile, transform, header, footer, fakeRequire,
-	defineShimPrefix, defineShimSuffix;
+	defineShimPrefix, defineShimSuffix, extractModuleNameRx;
 
 argv = require('optimist')
 	.usage('Usage $0 -o output-file [input-files...]')
@@ -13,18 +14,9 @@ argv = require('optimist')
 	.argv;
 
 dirs = argv._.length ? argv._ : ['unfold/*.js', 'node/*.js', './*.js'];
-blacklist = /debug\.js|monitor\/|timed\.js|globalized/;
-jsFiles = /\.js$/;
-
-fakeRequire = function(id) {
-	return (/\/when$/).test(id) ? window.when : window[id.replace('../', 'when_')];
-};
-
-header = ';(function(window,require){';
-footer = 'try{delete window.define;}catch(e){window.define=void 0;}}(this,'
-	+ fakeRequire.toString() + '));';
-defineShimPrefix = 'window.define = function(factory) { window.';
-defineShimSuffix = ' = factory(require); }; window.define.amd = {};\n';
+blacklistRx = /debug\.js|monitor\/|timed\.js|globalized/;
+jsFilesRx = /\.js$/;
+extractModuleNameRx = new RegExp(process.cwd().replace('/', '\\/') + '\\/(.+)\\.js$');
 
 when = require('../when');
 fn = require('../function');
@@ -36,6 +28,18 @@ glob = nodefn.lift(require('glob'));
 readFile = nodefn.lift(fs.readFile);
 writeFile = nodefn.lift(fs.writeFile, argv.o);
 
+pkg = JSON.parse(fs.readFileSync('./package.json'));
+name = pkg.name;
+main = pkg.main || name;
+
+fakeRequire = 'function(id) {return id.split(\'./\')[1] == \'' + main + '\' ? window.' + main + ' : window[id.replace(\'../\', \'' + name + '.\')]; }';
+
+header = ';(function(window,require){';
+footer = 'try{delete window.define;}catch(e){window.define=void 0;}}(this,'
+	+ fakeRequire.toString() + '));';
+defineShimPrefix = 'window.define = function(factory) { window.';
+defineShimSuffix = ' = factory(require); }; window.define.amd = {};\n';
+
 // Construct a pipeline that will transform a single file in the
 // way we need: get the full path, read its text content, remove the
 // require function if present, generate a global var name for it,
@@ -44,7 +48,7 @@ transform = fn.compose(
 	path.resolve,
 	getTextContent,
 	apply(globalName),
-	apply(fixGlobalName),
+	apply(prependNamespace(name, main)),
 	apply(addDefineShim)
 );
 
@@ -69,7 +73,7 @@ when.map(dirs, glob)
 // Pipeline helpers
 
 function shouldInclude(file) {
-	return jsFiles.test(file) && !blacklist.test(file);
+	return jsFilesRx.test(file) && !blacklistRx.test(file);
 }
 
 // Get the text content of a file
@@ -82,14 +86,23 @@ function getTextContent(file) {
 // file path.  content is left untouched, and simply threaded through
 // Returns the pair [globalName, content]
 function globalName(file, content) {
-	var match = /\/(when\/.+)\.js$/.exec(file);
 
-	return [match ? match[1].replace(/\//g, '_') : 'when', content];
+	var match, global;
+
+	match = extractModuleNameRx.exec(file);
+	global = match && match[1];
+
+	if(!global) {
+		throw new Error('Cannot generate global name: ' + file);
+	}
+
+	return [global, content];
 }
 
-// Lame, but necessary.  Need to find a better way.
-function fixGlobalName(name, content) {
-	return [name == 'when_when' ? 'when' : name, content];
+function prependNamespace(ns, main) {
+	return function(global, content) {
+		return [global == main ? global : (ns+'.'+global.replace('/', '_')), content];
+	}
 }
 
 // Adds a define shim for the supplied globalVarName at

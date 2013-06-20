@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+var fs, path, argv, glob, when, fn, nodefn, jsFiles, blacklist, dirs,
+	readFile, writeFile, transform, header, footer, fakeRequire,
+	defineShimPrefix, defineShimSuffix;
+
+argv = require('optimist')
+	.usage('Usage $0 -o output-file [input-files...]')
+	.options('o', {
+		alias: 'output',
+		demand: 'true',
+		describe: 'Output js file'
+	})
+	.argv;
+
+dirs = argv._.length ? argv._ : ['unfold/*.js', 'node/*.js', './*.js'];
+blacklist = /debug\.js|monitor\/|timed\.js|globalized/;
+jsFiles = /\.js$/;
+
+fakeRequire = function(id) {
+	return (/\/when$/).test(id) ? window.when : window[id.replace('../', 'when_')];
+};
+
+header = ';(function(window, require) {';
+footer = '}(this, ' + fakeRequire.toString() + '));';
+defineShimPrefix = 'window.define = function(factory) { try{ delete window.define; } catch(e){ window.define = void 0; } window.';
+defineShimSuffix = ' = factory(); }; window.define.amd = {};\n';
+
+when = require('../when');
+fn = require('../function');
+nodefn = require('../node/function');
+
+fs = require('fs');
+path = require('path');
+glob = nodefn.lift(require('glob'));
+readFile = nodefn.lift(fs.readFile);
+writeFile = nodefn.lift(fs.writeFile, argv.o);
+
+// Construct a pipeline that will transform a single file in the
+// way we need: get the full path, read its text content, remove the
+// require function if present, generate a global var name for it,
+// then add a define() shim
+transform = fn.compose(
+	path.resolve,
+	getTextContent,
+	apply(removeRequire),
+	apply(globalName),
+	apply(fixGlobalName),
+	apply(addDefineShim)
+);
+
+// Collect all the module files we want to include
+when.map(dirs, glob)
+	.then(function(fileSets) {
+		// Filter and sort the files
+		return fileSets.concat.apply([], fileSets).filter(shouldInclude).reverse();
+	})
+	.then(function(files) {
+		// transform all of them
+		return when.map(files, transform);
+	})
+	.then(function(processed) {
+		// Form the final output blob
+		return header + processed.join('') + footer;
+	})
+	.then(writeFile)
+	.otherwise(console.error);
+
+//---------------------------------------------------------
+// Pipeline helpers
+
+function shouldInclude(file) {
+	return jsFiles.test(file) && !blacklist.test(file);
+}
+
+// Get the text content of a file
+// Returns the pair [file, content]
+function getTextContent(file) {
+	return when.join(file, readFile(file).then(String));
+}
+
+// Remove 'require' from the define signature
+// Returns the pair [name, newModuleText]
+function removeRequire(name, moduleText) {
+	return [name, moduleText.replace('define(function(require) {', 'define(function() {')];
+}
+
+// Generate a global var name for the module based on its
+// file path.  content is left untouched, and simply threaded through
+// Returns the pair [globalName, content]
+function globalName(file, content) {
+	var match = /\/(when\/.+)\.js$/.exec(file);
+
+	return [match ? match[1].replace(/\//g, '_') : 'when', content];
+}
+
+// Lame, but necessary.  Need to find a better way.
+function fixGlobalName(name, content) {
+	return [name == 'when_when' ? 'when' : name, content];
+}
+
+// Adds a define shim for the supplied globalVarName at
+// the beginning of the content.
+// Returns the modified content
+function addDefineShim(name, content) {
+	return defineShimPrefix + name + defineShimSuffix + content;
+}
+
+//---------------------------------------------------------
+// Other helpers
+
+// Given a function, returns a new function that accepts an array
+// and spreads it onto f's argument list.
+function apply(f) {
+	return function(args) {
+		return f.apply(this, args);
+	};
+}

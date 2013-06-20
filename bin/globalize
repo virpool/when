@@ -66,7 +66,6 @@ when.map(dirs, nodefn.lift(glob))
 			.filter(excludes).sort(whenFirst);
 	})
 	.then(function(files) {
-		console.log(files);
 		// transform all of them
 		return when.map(files, transform);
 	})

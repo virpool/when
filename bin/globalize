@@ -20,10 +20,11 @@ fakeRequire = function(id) {
 	return (/\/when$/).test(id) ? window.when : window[id.replace('../', 'when_')];
 };
 
-header = ';(function(window, require) {';
-footer = '}(this, ' + fakeRequire.toString() + '));';
-defineShimPrefix = 'window.define = function(factory) { try{ delete window.define; } catch(e){ window.define = void 0; } window.';
-defineShimSuffix = ' = factory(); }; window.define.amd = {};\n';
+header = ';(function(window,require){';
+footer = 'try{delete window.define;}catch(e){window.define=void 0;}}(this,'
+	+ fakeRequire.toString() + '));';
+defineShimPrefix = 'window.define = function(factory) { window.';
+defineShimSuffix = ' = factory(require); }; window.define.amd = {};\n';
 
 when = require('../when');
 fn = require('../function');
@@ -42,7 +43,6 @@ writeFile = nodefn.lift(fs.writeFile, argv.o);
 transform = fn.compose(
 	path.resolve,
 	getTextContent,
-	apply(removeRequire),
 	apply(globalName),
 	apply(fixGlobalName),
 	apply(addDefineShim)
@@ -76,12 +76,6 @@ function shouldInclude(file) {
 // Returns the pair [file, content]
 function getTextContent(file) {
 	return when.join(file, readFile(file).then(String));
-}
-
-// Remove 'require' from the define signature
-// Returns the pair [name, newModuleText]
-function removeRequire(name, moduleText) {
-	return [name, moduleText.replace('define(function(require) {', 'define(function() {')];
 }
 
 // Generate a global var name for the module based on its

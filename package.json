@@ -44,6 +44,7 @@
 		"promises-aplus-tests": "~1",
 		"benchmark": "~1",
 		"microtime": "~0",
+		"minimatch": "~0.2",
 		"optimist": "~0.5",
 		"glob": "~3"
 	},
@@ -57,6 +58,6 @@
 		"tunnel": "sauceme -m",
 		"start": "buster static -e browser",
 		"bench": "node benchmark/promise && node benchmark/map",
-		"globalize": "bin/globalize -o when.globalized.js"
+		"globalize": "bin/globalize -o when.globalized.js -x '**/{timed,debug}.js' {.,unfold,node}/*.js"
 	}
 }

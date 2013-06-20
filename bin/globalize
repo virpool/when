@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-var fs, path, pkg, argv, glob, when, fn, nodefn,
-	jsFilesRx, blacklistRx, dirs, name, main,
+var fs, path, pkg, argv, glob, minimatch, when, fn, nodefn,
+	jsFilesRx, dirs, name, main, excludes,
 	readFile, writeFile, transform, header, footer, fakeRequire,
 	defineShimPrefix, defineShimSuffix, extractModuleNameRx;
 
@@ -11,10 +11,13 @@ argv = require('optimist')
 		demand: 'true',
 		describe: 'Output js file'
 	})
+	.options('x', {
+		alias: 'exclude',
+		describe: 'Exclude a file or files'
+	})
 	.argv;
 
-dirs = argv._.length ? argv._ : ['unfold/*.js', 'node/*.js', './*.js'];
-blacklistRx = /debug\.js|monitor\/|timed\.js|globalized/;
+dirs = argv._.length ? argv._ : ['./*.js'];
 jsFilesRx = /\.js$/;
 extractModuleNameRx = new RegExp(process.cwd().replace('/', '\\/') + '\\/(.+)\\.js$');
 
@@ -24,7 +27,8 @@ nodefn = require('../node/function');
 
 fs = require('fs');
 path = require('path');
-glob = nodefn.lift(require('glob'));
+glob = require('glob');
+minimatch = require('minimatch');
 readFile = nodefn.lift(fs.readFile);
 writeFile = nodefn.lift(fs.writeFile, argv.o);
 
@@ -40,12 +44,13 @@ footer = 'try{delete window.define;}catch(e){window.define=void 0;}}(this,'
 defineShimPrefix = 'window.define = function(factory) { window.';
 defineShimSuffix = ' = factory(require); }; window.define.amd = {};\n';
 
+excludes = makeExcludes(argv.x, argv.o);
+
 // Construct a pipeline that will transform a single file in the
 // way we need: get the full path, read its text content, remove the
 // require function if present, generate a global var name for it,
 // then add a define() shim
 transform = fn.compose(
-	path.resolve,
 	getTextContent,
 	apply(globalName),
 	apply(prependNamespace(name, main)),
@@ -53,12 +58,15 @@ transform = fn.compose(
 );
 
 // Collect all the module files we want to include
-when.map(dirs, glob)
+when.map(dirs, nodefn.lift(glob))
 	.then(function(fileSets) {
 		// Filter and sort the files
-		return fileSets.concat.apply([], fileSets).filter(shouldInclude).reverse();
+		return fileSets.concat.apply([], fileSets)
+			.map(function(p) { return path.resolve(p); })
+			.filter(excludes).sort(whenFirst);
 	})
 	.then(function(files) {
+		console.log(files);
 		// transform all of them
 		return when.map(files, transform);
 	})
@@ -71,10 +79,6 @@ when.map(dirs, glob)
 
 //---------------------------------------------------------
 // Pipeline helpers
-
-function shouldInclude(file) {
-	return jsFilesRx.test(file) && !blacklistRx.test(file);
-}
 
 // Get the text content of a file
 // Returns the pair [file, content]
@@ -99,6 +103,9 @@ function globalName(file, content) {
 	return [global, content];
 }
 
+// This *creates a function* that will add global namespace
+// to global name if necessary
+// The returned function returns the pair [namespacedGlobalName, content]
 function prependNamespace(ns, main) {
 	return function(global, content) {
 		return [global == main ? global : (ns+'.'+global.replace('/', '_')), content];
@@ -114,6 +121,37 @@ function addDefineShim(name, content) {
 
 //---------------------------------------------------------
 // Other helpers
+
+function makeExcludes(excludes, outfile) {
+	var ex;
+
+	if(!excludes) {
+		return function() { return true; }
+	} else {
+		ex = Array.isArray(excludes) ? excludes : [excludes];
+	}
+
+	// Ensure we never include the output file in the input!
+	outfile = path.resolve(outfile);
+	ex = ex.map(minimatch.filter).concat(function(p) {
+		return p === outfile;
+	});
+
+	return function(p) {
+		return !ex.some(function(mm) {
+			return mm(p);
+		});
+	};
+}
+
+function whenFirst(a, b) {
+	a = path.basename(a);
+	b = path.basename(b);
+
+	return a < b ? 1
+		: a > b ? -1
+			: 0;
+}
 
 // Given a function, returns a new function that accepts an array
 // and spreads it onto f's argument list.

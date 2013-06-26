@@ -235,7 +235,10 @@ define(function (require) {
 			return corePromise(x).inspect();
 		},
 		function(reason) {
-			return corePromise.reject(reason).inspect();
+			// Don't leave an unhandled rejection laying around, which
+			// would be reported, confusingly, by when/monitor
+			reason = corePromise.reject(reason);
+			return reason.otherwise(reason.inspect);
 		});
 	}
 

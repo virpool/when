@@ -25,7 +25,7 @@ define(function(require) {
 	reasonMsg = '--- Caused by reason ---';
 	filteredFramesMsg = '  ...[filtered frames]...';
 
-	excludeRx = /when\.js|when\/monitor\//i;
+	excludeRx = /when\.js|when\/(lib|monitor)\//i;
 	filter = stackFilter(exclude, mergePromiseFrames);
 	reporter = simpleReporter(formatter(filter, rejectionMsg, reasonMsg), logger);
 

@@ -11,14 +11,10 @@
 
 (function(define) {
 define(function(require) {
-	/*global vertx,setTimeout*/
 	var when, setTimer;
 
 	when = require('./when');
-
-	setTimer = typeof vertx === 'object'
-		? function (f, ms) { return vertx.setTimer(ms, f); }
-		: setTimeout;
+	setTimer = require('./lib/timer').set;
 
     /**
      * Creates a new promise that will resolve after a msec delay.  If
@@ -32,13 +28,6 @@ define(function(require) {
 	 *  by msec
      */
     return function delay(msec, value) {
-		// Support reversed, deprecated argument ordering
-		if(typeof value === 'number') {
-			var tmp = value;
-			value = msec;
-			msec = tmp;
-		}
-
 		return when.promise(function(resolve, reject, notify) {
 			when(value, function(val) {
 				setTimer(function() {

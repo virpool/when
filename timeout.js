@@ -12,18 +12,10 @@
 
 (function(define) {
 define(function(require) {
-	/*global vertx,setTimeout,clearTimeout*/
-    var when, setTimer, cancelTimer;
+    var when, timer;
 
 	when = require('./when');
-
-	if(typeof vertx === 'object') {
-		setTimer = function (f, ms) { return vertx.setTimer(ms, f); };
-		cancelTimer = vertx.cancelTimer;
-	} else {
-		setTimer = setTimeout;
-		cancelTimer = clearTimeout;
-	}
+	timer = require('./lib/timer');
 
     /**
      * Returns a new promise that will automatically reject after msec if
@@ -36,26 +28,19 @@ define(function(require) {
 	 *  equivalent to trigger if resolved/rejected before msec
      */
     return function timeout(msec, trigger) {
-		// Support reversed, deprecated argument ordering
-		if(typeof trigger === 'number') {
-			var tmp = trigger;
-			trigger = msec;
-			msec = tmp;
-		}
-
 		return when.promise(function(resolve, reject, notify) {
 
-			var timeoutRef = setTimer(function onTimeout() {
+			var timeoutRef = timer.set(function onTimeout() {
 				reject(new Error('timed out after ' + msec + 'ms'));
 			}, msec);
 
 			when(trigger,
 				function onFulfill(value) {
-					cancelTimer(timeoutRef);
+					timer.cancel(timeoutRef);
 					resolve(value);
 				},
 				function onReject(reason) {
-					cancelTimer(timeoutRef);
+					timer.cancel(timeoutRef);
 					reject(reason);
 				},
 				notify

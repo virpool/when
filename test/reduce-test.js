@@ -19,7 +19,7 @@ define('when.reduce-test', function (require) {
 	}
 
 	function later(val) {
-		return delay(val, Math.random() * 10);
+		return delay(Math.random() * 10, val);
 	}
 
 	buster.testCase('when.reduce', {

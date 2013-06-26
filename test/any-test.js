@@ -27,7 +27,7 @@ define('when.any-test', function (require) {
 	buster.testCase('when.any', {
 
 		'should resolve to undefined with empty input array': function(done) {
-			when.any([],
+			when.any([]).then(
 				function(result) {
 					refute.defined(result);
 				},
@@ -37,7 +37,7 @@ define('when.any-test', function (require) {
 
 		'should resolve with an input value': function(done) {
 			var input = [1, 2, 3];
-			when.any(input,
+			when.any(input).then(
 				function(result) {
 					assert(contains(input, result));
 				},
@@ -47,7 +47,7 @@ define('when.any-test', function (require) {
 
 		'should resolve with a promised input value': function(done) {
 			var input = [resolved(1), resolved(2), resolved(3)];
-			when.any(input,
+			when.any(input).then(
 				function(result) {
 					assert(contains([1, 2, 3], result));
 				},
@@ -57,7 +57,7 @@ define('when.any-test', function (require) {
 
 		'should reject with all rejected input values if all inputs are rejected': function(done) {
 			var input = [rejected(1), rejected(2), rejected(3)];
-			when.any(input,
+			when.any(input).then(
 				fail,
 				function(result) {
 					assert.equals(result, [1, 2, 3]);
@@ -71,7 +71,7 @@ define('when.any-test', function (require) {
 			expected = [1, 2, 3];
 			input = resolved(expected);
 
-			when.any(input,
+			when.any(input).then(
 				function(result) {
 					refute.equals(expected.indexOf(result), -1);
 				},
@@ -90,7 +90,7 @@ define('when.any-test', function (require) {
 		},
 
 		'should resolve to undefined when input promise does not resolve to array': function(done) {
-			when.any(resolved(1),
+			when.any(resolved(1)).then(
 				function(result) {
 					refute.defined(result);
 				},

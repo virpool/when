@@ -21,7 +21,7 @@ define('when.map-test', function (require) {
 	}
 
 	function deferredMapper(val) {
-		return delay(mapper(val), Math.random()*10);
+		return delay(Math.random()*10, mapper(val));
 	}
 
 	buster.testCase('when.map', {

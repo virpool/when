@@ -51,7 +51,7 @@ define(function(require) {
 	 * @returns {Promise} promise for the return value of func
 	 */
 	function apply(func, promisedArgs) {
-		return when.all(promisedArgs || [], function(args) {
+		return when.all(promisedArgs || []).then(function(args) {
 			return func.apply(null, args);
 		});
 	}

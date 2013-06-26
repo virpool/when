@@ -41,13 +41,11 @@ define(function (require) {
 	 * Makes the when.js core promise implementation
 	 */
 	function makeWhenCore(makeCore, makeScheduler) {
-		
-		var makePromise = makeCore({
-			enqueue: makeScheduler(),
-			monitor: typeof console != 'undefined' ? console : when
-		});
 
-		return makePromise({
+		return makeCore({
+			scheduler: makeScheduler(),
+			monitor: typeof console != 'undefined' ? console : when
+		}).extend({
 			/**
 			 * Register a rejection handler.  Shortcut for .then(undefined, onRejected)
 			 * @param {function?} onRejected

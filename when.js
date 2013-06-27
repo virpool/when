@@ -44,7 +44,7 @@ define(function (require) {
 
 		return makeCore({
 			scheduler: makeScheduler(),
-			monitor: typeof console != 'undefined' ? console : when
+			monitor: console.monitorPromise
 		}).extend({
 			/**
 			 * Register a rejection handler.  Shortcut for .then(undefined, onRejected)

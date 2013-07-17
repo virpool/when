@@ -9,7 +9,7 @@
  *
  * @author Brian Cavalier
  * @author John Hann
- * @version 2.2.0
+ * @version 2.2.1
  */
 (function(define) { 'use strict';
 define(function (require) {
@@ -18,7 +18,7 @@ define(function (require) {
 
 	// Public API
 
-	when.promise     = corePromise.promise; // Create a pending promise
+	when.promise     = promise = corePromise.promise; // Create a pending promise
 	when.resolve     = corePromise;         // Create a resolved promise
 	when.reject      = reject;              // Create a rejected promise
 	when.makePromise = corePromise.extend;  // Make new promise subtypes
@@ -44,7 +44,7 @@ define(function (require) {
 
 		return makeCore({
 			scheduler: makeScheduler(),
-			monitor: console.monitorPromise
+			monitor: typeof console != 'undefined' ? console : when
 		}).extend({
 			/**
 			 * Register a rejection handler.  Shortcut for .then(undefined, onRejected)
@@ -104,8 +104,6 @@ define(function (require) {
 			}
 		});
 	}
-
-	promise = corePromise.promise;
 
 	/**
 	 * Register an observer for a promise or immediate value.
@@ -414,7 +412,7 @@ define(function (require) {
 	}
 
 	//
-	// Utilities, etc.
+	// Internals, utilities, etc.
 	//
 
 	var corePromise, promise, bind, uncurryThis, uncurryThisApply, fcall,

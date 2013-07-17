@@ -13,36 +13,57 @@ define(function() {
 	return function createAggregator(reporter) {
 		var promises, nextKey;
 
-		nextKey = 0;
+		function Monitor(parent) {
+			if(!(this instanceof Monitor)) {
+				return new Monitor(parent);
+			}
 
-		function Monitor(key) {
-			this.key = key;
+			var stackHolder;
+
+			try {
+				throw new Error();
+			} catch(e) {
+				stackHolder = e;
+			}
+
+			this.key = nextKey++;
+			promises[this.key] = this;
+
+			this.parent = parent;
+			this.timestamp = +(new Date());
+			this.createdAt = stackHolder;
 		}
 
 		Monitor.prototype = {
 			observed: function () {
-				delete promises[this.key];
+				if(this.key in promises) {
+					delete promises[this.key];
+					report();
+				}
+
+				return new Monitor(this);
 			},
 			fulfilled: function () {
-				delete promises[this.key];
-				report();
+				if(this.key in promises) {
+					delete promises[this.key];
+					report();
+				}
 			},
 			rejected: function (reason) {
-				var stackHolder, rec;
+				var stackHolder;
 
-				rec = promises[this.key];
+				if(this.key in promises) {
 
-				if (rec) {
 					try {
 						throw new Error(reason && reason.message || reason);
 					} catch (e) {
 						stackHolder = e;
 					}
 
-					rec.reason = reason;
-					rec.rejectedAt = stackHolder;
-
+					this.reason = reason;
+					this.rejectedAt = stackHolder;
 					report();
+
 				}
 			}
 		};
@@ -52,31 +73,10 @@ define(function() {
 		return publish({ publish: publish });
 
 		function publish(target) {
-			target.monitorPromise = monitorPromise;
+			target.PromiseStatus = Monitor;
 			target.reportUnhandled = report;
 			target.resetUnhandled = reset;
 			return target;
-		}
-
-		function monitorPromise(parentKey) {
-			var stackHolder, key;
-
-			try {
-				throw new Error();
-			} catch(e) {
-				stackHolder = e;
-			}
-
-			key = nextKey++;
-
-			promises[key] = {
-				key: key,
-				timestamp: +(new Date()),
-				createdAt: stackHolder,
-				parent: promises[parentKey]
-			};
-
-			return new Monitor(key);
 		}
 
 		function report() {
@@ -84,7 +84,8 @@ define(function() {
 		}
 
 		function reset() {
-			promises = {};
+			nextKey = 0;
+			promises = {}; // Should be WeakMap
 		}
 	};
 

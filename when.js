@@ -14,7 +14,12 @@
 (function(define) { 'use strict';
 define(function (require) {
 
-	corePromise = makeWhenCore(require('./lib/makeCore'), require('./lib/makeScheduler'));
+	corePromise = makeWhenCore(
+		require('./lib/makeCore'), require('./lib/makeScheduler'));
+	objectPromise = corePromise.extend(require('./lib/objectPromise'));
+	applicativePromise =
+		objectPromise.extend(require('./lib/applicativePromise'));
+	arrayPromise = require('./lib/arrayPromise')(applicativePromise);
 
 	// Public API
 
@@ -36,6 +41,10 @@ define(function (require) {
 	when.some      = some;       // Multi-winner race
 
 	when.isPromise = isPromise;  // Determine if a thing is a promise
+
+	when.object = objectPromise;
+	when.function = applicativePromise;
+	when.array = arrayPromise;
 
 	/**
 	 * Makes the when.js core promise implementation
@@ -95,12 +104,7 @@ define(function (require) {
 			 * @return {Promise}
 			 */
 			spread: function(onFulfilled) {
-				return this.then(function(array) {
-					// array may contain promises, so resolve its contents.
-					return all(array).then(function(array) {
-						return onFulfilled.apply(undef, array);
-					});
-				});
+				return arrayPromise(this).spread(onFulfilled);
 			}
 		});
 	}
@@ -202,7 +206,7 @@ define(function (require) {
 	 * have fulfilled, or will reject when *any one* of the input promises rejects.
 	 */
 	function join(/* ...promises */) {
-		return _map(arguments, identity);
+		return all(arguments);
 	}
 
 	/**
@@ -216,7 +220,7 @@ define(function (require) {
 	 * @returns {Promise}
 	 */
 	function all(promisesOrValues) {
-		return _map(promisesOrValues, identity);
+		return arrayPromise(promisesOrValues).all();
 	}
 
 	/**
@@ -259,26 +263,11 @@ define(function (require) {
 	 *      in each call to reduceFunc.
 	 * @returns {Promise} that will resolve to the final reduced value
 	 */
-	function reduce(promise, reduceFunc /*, initialValue */) {
+	function reduce(promise /* reduceFunc, initialValue */) {
 		var args = slice(arguments, 1);
 
-		return when(promise, function(array) {
-			var total;
-
-			total = array.length;
-
-			// Wrap the supplied reduceFunc with one that handles promises and then
-			// delegates to the supplied.
-			args[0] = function (current, val, i) {
-				return when(current, function (c) {
-					return when(val, function (value) {
-						return reduceFunc(c, value, i, total);
-					});
-				});
-			};
-
-			return reduceArray(array, args);
-		});
+		promise = arrayPromise(promise);
+		return promise.reduce.apply(promise, args);
 	}
 
 	/**
@@ -409,7 +398,8 @@ define(function (require) {
 	// Internals, utilities, etc.
 	//
 
-	var corePromise, promise, bind, uncurryThis, uncurryThisApply, fcall,
+	var corePromise, objectPromise, applicativePromise, arrayPromise, promise,
+		bind, uncurryThis, uncurryThisApply, fcall,
 		arrayProto, reduceArray, forEach, slice, undef;
 
 	//

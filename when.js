@@ -19,6 +19,7 @@ define(function (require) {
 	objectPromise = corePromise.extend(require('./lib/objectPromise'));
 	applicativePromise =
 		objectPromise.extend(require('./lib/applicativePromise'));
+	iteratorPromise = require('./lib/iteratorPromise')(applicativePromise);
 	arrayPromise = require('./lib/arrayPromise')(applicativePromise);
 
 	// Public API
@@ -44,6 +45,7 @@ define(function (require) {
 
 	when.object = objectPromise;
 	when.function = applicativePromise;
+	when.iterator = iteratorPromise;
 	when.array = arrayPromise;
 
 	/**
@@ -398,7 +400,8 @@ define(function (require) {
 	// Internals, utilities, etc.
 	//
 
-	var corePromise, objectPromise, applicativePromise, arrayPromise, promise,
+	var corePromise, promise,
+		objectPromise, applicativePromise, arrayPromise, iteratorPromise,
 		bind, uncurryThis, uncurryThisApply, fcall,
 		arrayProto, reduceArray, forEach, slice, undef;
 

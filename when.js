@@ -14,17 +14,22 @@
 (function(define) { 'use strict';
 define(function (require) {
 
+	timer = require('./lib/timer');
+
 	corePromise = makeWhenCore(
 		require('./lib/makeCore'), require('./lib/makeScheduler'));
+
 	objectPromise = corePromise.extend(require('./lib/objectPromise'));
 	applicativePromise =
 		objectPromise.extend(require('./lib/applicativePromise'));
+	functionPromise =
+		applicativePromise.extend(require('./lib/functionPromise'));
 	iteratorPromise = require('./lib/iteratorPromise')(applicativePromise);
 	arrayPromise = require('./lib/arrayPromise')(applicativePromise);
 
 	// Public API
 
-	when.promise     = promise = corePromise.promise; // Create a pending promise
+	when.promise = promise = corePromise.promise; // Create a pending promise
 	when.resolve     = corePromise;         // Create a resolved promise
 	when.reject      = reject;              // Create a rejected promise
 	when.makePromise = corePromise.extend;  // Make new promise subtypes
@@ -107,6 +112,42 @@ define(function (require) {
 			 */
 			spread: function(onFulfilled) {
 				return arrayPromise(this).spread(onFulfilled);
+			},
+
+			delay: function(msec) {
+				var promise = this.constructor.promise;
+
+				return this.then(function(value) {
+					return promise(function(resolve) {
+						timer.set(function() {
+							resolve(value);
+						}, msec);
+					});
+				});
+			},
+
+			timeout: function(msec) {
+				var then = this.then;
+
+				return this.constructor.promise(
+					function(resolve, reject, notify) {
+						var timeoutRef = timer.set(function onTimeout() {
+							reject(new Error('timed out after '+msec+'ms'));
+						}, msec);
+
+						then(
+							function(value) {
+								timer.cancel(timeoutRef);
+								resolve(value);
+							},
+							function(reason) {
+								timer.cancel(timeoutRef);
+								reject(reason);
+							},
+							notify
+						);
+					}
+				);
 			}
 		});
 	}
@@ -235,9 +276,7 @@ define(function (require) {
 	 *  outcome snapshots for each input promise.
 	 */
 	function settle(array) {
-		return _map(array,
-			corePromise.toFulfilledState,
-			corePromise.toRejectedState);
+		return arrayPromise(array).settle();
 	}
 
 	/**
@@ -249,7 +288,7 @@ define(function (require) {
 	 *  or reject if any input promise rejects.
 	 */
 	function map(array, mapFunc) {
-		return _map(array, mapFunc);
+		return arrayPromise(array).map(mapFunc).all();
 	}
 
 	/**
@@ -292,23 +331,24 @@ define(function (require) {
 	 * it becomes impossible for howMany to resolve, for example, when
 	 * (promisesOrValues.length - howMany) + 1 input promises reject.
 	 *
-	 * @param {Array} promisesOrValues array of anything, may contain a mix
+	 * @param {Array} array array of anything, may contain a mix
 	 *      of promises and values
 	 * @param howMany {number} number of promisesOrValues to resolve
 	 * @returns {Promise} promise that will resolve to an array of howMany values that
 	 *  resolved first, or will reject with an array of
 	 *  (promisesOrValues.length - howMany) + 1 rejection reasons.
 	 */
-	function some(promisesOrValues, howMany) {
+	function some(array, howMany) {
 
-		return when(promisesOrValues, function(promisesOrValues) {
+		return when(array, function(array) {
 
 			return promise(resolveSome);
 
 			function resolveSome(resolve, reject, notify) {
-				var toResolve, toReject, values, reasons, fulfillOne, rejectOne, len, i;
+				var toResolve, toReject, values, reasons,
+					fulfillOne, rejectOne, len;
 
-				len = promisesOrValues.length >>> 0;
+				len = array.length >>> 0;
 
 				toResolve = Math.max(0, Math.min(howMany, len));
 				values = [];
@@ -329,20 +369,18 @@ define(function (require) {
 						}
 					};
 
-					fulfillOne = function(val) {
-						// This orders the values based on promise resolution order
-						values.push(val);
+					fulfillOne = function(value) {
+						// This orders values based on promise resolution order
+						values.push(value);
 						if (!--toResolve) {
 							fulfillOne = rejectOne = identity;
 							resolve(values);
 						}
 					};
 
-					for(i = 0; i < len; ++i) {
-						if(i in promisesOrValues) {
-							when(promisesOrValues[i], fulfiller, rejecter, notify);
-						}
-					}
+					forEach(array, function(x) {
+						when(x, fulfiller, rejecter, notify);
+					});
 				}
 
 				function rejecter(reason) {
@@ -356,52 +394,13 @@ define(function (require) {
 		});
 	}
 
-	/**
-	 * Internal map that allows a fallback to handle rejections
-	 * @param {Array|Promise} array array of anything, may contain promises and values
-	 * @param {function} mapFunc map function which may return a promise or value
-	 * @param {function?} fallback function to handle rejected promises
-	 * @returns {Promise} promise that will fulfill with an array of mapped values
-	 *  or reject if any input promise rejects.
-	 */
-	function _map(array, mapFunc, fallback) {
-		return when(array, function(array) {
-
-			return promise(resolveMap);
-
-			function resolveMap(resolve, reject, notify) {
-				var results, toResolve;
-
-				results = [];
-				if(!(array.length >>> 0)) {
-					resolve(results);
-					return;
-				}
-
-				toResolve = 0;
-
-				// Since mapFunc may be async, get all invocations of it into flight
-				forEach(array, function resolveOne(item, i) {
-					toResolve++;
-					when(item, mapFunc, fallback).then(function(mapped) {
-						results[i] = mapped;
-
-						if(!--toResolve) {
-							resolve(results);
-						}
-					}, reject, notify);
-				});
-
-			}
-		});
-	}
-
 	//
 	// Internals, utilities, etc.
 	//
 
-	var corePromise, promise,
-		objectPromise, applicativePromise, arrayPromise, iteratorPromise,
+	var corePromise, promise, timer,
+		objectPromise, functionPromise, applicativePromise,
+		arrayPromise, iteratorPromise,
 		bind, uncurryThis, uncurryThisApply, fcall,
 		arrayProto, reduceArray, forEach, slice, undef;
 

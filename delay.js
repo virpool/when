@@ -11,10 +11,8 @@
 
 (function(define) {
 define(function(require) {
-	var when, setTimer;
 
-	when = require('./when');
-	setTimer = require('./lib/timer').set;
+	var resolve = require('./when').resolve;
 
     /**
      * Creates a new promise that will resolve after a msec delay.  If
@@ -28,14 +26,7 @@ define(function(require) {
 	 *  by msec
      */
     return function delay(msec, value) {
-		return when.promise(function(resolve, reject, notify) {
-			when(value, function(val) {
-				setTimer(function() {
-					resolve(val);
-				}, msec);
-			},
-			reject, notify);
-		});
+		return resolve(value).delay(msec);
     };
 
 });

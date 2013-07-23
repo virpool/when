@@ -12,10 +12,8 @@
 
 (function(define) {
 define(function(require) {
-    var when, timer;
 
-	when = require('./when');
-	timer = require('./lib/timer');
+    var resolve = require('./when').resolve;
 
     /**
      * Returns a new promise that will automatically reject after msec if
@@ -28,24 +26,7 @@ define(function(require) {
 	 *  equivalent to trigger if resolved/rejected before msec
      */
     return function timeout(msec, trigger) {
-		return when.promise(function(resolve, reject, notify) {
-
-			var timeoutRef = timer.set(function onTimeout() {
-				reject(new Error('timed out after ' + msec + 'ms'));
-			}, msec);
-
-			when(trigger,
-				function onFulfill(value) {
-					timer.cancel(timeoutRef);
-					resolve(value);
-				},
-				function onReject(reason) {
-					timer.cancel(timeoutRef);
-					reject(reason);
-				},
-				notify
-			);
-		});
+		return resolve(trigger).timeout(msec);
     };
 });
 })(

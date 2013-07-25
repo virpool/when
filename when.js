@@ -63,6 +63,16 @@ define(function (require) {
 			monitor: typeof console != 'undefined' ? console : when
 		}).extend({
 			/**
+			 * Applies f to the promise's eventual value.
+			 * @param {function} f function to apply
+			 * @returns {Promise} promise for the return value of applying f
+			 *  to this promise's value
+			 */
+			map: function(f) {
+				return this.then(f);
+			},
+
+			/**
 			 * Register a rejection handler.  Shortcut for .then(undefined, onRejected)
 			 * @param {function?} onRejected
 			 * @return {Promise}

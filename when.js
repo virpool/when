@@ -111,6 +111,7 @@ define(function (require) {
 			 * @return {Promise}
 			 */
 			spread: function(onFulfilled) {
+				// TODO: remove?
 				return arrayPromise(this).spread(onFulfilled);
 			},
 

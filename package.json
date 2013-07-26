@@ -54,6 +54,7 @@
 		"ci": "npm test && sauceme",
 		"tunnel": "sauceme -m",
 		"start": "buster static -e browser",
-		"benchmark": "node benchmark/promise && node benchmark/map"
+		"benchmark": "node benchmark/promise && node benchmark/map",
+		"anachronize": "anachronize -x '**/{timed,debug}.js' '{.,unfold,node}/*.js' -o when.anachronized.js"
 	}
 }

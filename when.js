@@ -24,8 +24,10 @@ define(function (require) {
 		objectPromise.extend(require('./lib/applicativePromise'));
 	functionPromise =
 		applicativePromise.extend(require('./lib/functionPromise'));
-	iteratorPromise = require('./lib/iteratorPromise')(applicativePromise);
-	arrayPromise = require('./lib/arrayPromise')(applicativePromise);
+	iteratorPromise =
+		applicativePromise.extend(require('./lib/iteratorPromise'));
+	arrayPromise =
+		applicativePromise.extend(require('./lib/arrayPromise'));
 
 	// Public API
 
@@ -49,7 +51,7 @@ define(function (require) {
 	when.isPromise = isPromise;  // Determine if a thing is a promise
 
 	when.object = objectPromise;
-	when.function = applicativePromise;
+	when.function = functionPromise;
 	when.iterator = iteratorPromise;
 	when.array = arrayPromise;
 

@@ -18,7 +18,7 @@ define('when/lib/makeCore-test', function (require) {
 
 	makeCore = require('when/lib/makeCore');
 
-	buster.testCase('=>when/lib/makeCore', {
+	buster.testCase('when/lib/makeCore', {
 		'should have core API': function() {
 			var core = makeCore({ scheduler: testScheduler });
 

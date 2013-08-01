@@ -61,6 +61,30 @@ define('when/lib/makeCore-test', function (require) {
 
 				assert.isFunction(extended(sentinel).addedMethod);
 				assert.isFunction(extended(sentinel).then);
+			},
+
+			'should inherit API': function() {
+				var extended;
+
+				extended = makeCore({ scheduler: testScheduler })
+					.extend({ addedMethod1: function() {} })
+					.extend({ addedMethod2: function() {} });
+
+				assert.isFunction(extended(sentinel).addedMethod1);
+				assert.isFunction(extended(sentinel).addedMethod2);
+			},
+
+			'should share scheduler': function() {
+				var scheduler, core, extended;
+
+				scheduler = this.spy(testScheduler);
+
+				core = makeCore({ scheduler: scheduler });
+				extended = core.extend();
+
+				return extended(sentinel).then(function() {
+					assert.called(scheduler);
+				});
 			}
 		},
 

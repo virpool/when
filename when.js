@@ -128,7 +128,7 @@ define(function (require) {
 			},
 
 			delay: function(msec) {
-				var promise = this.constructor.promise;
+				var promise = this.ownType.promise;
 
 				return this.then(function(value) {
 					return promise(function(resolve) {
@@ -142,7 +142,7 @@ define(function (require) {
 			timeout: function(msec) {
 				var then = this.then;
 
-				return this.constructor.promise(
+				return this.ownType.promise(
 					function(resolve, reject, notify) {
 						var timeoutRef = timer.set(function onTimeout() {
 							reject(new Error('timed out after '+msec+'ms'));

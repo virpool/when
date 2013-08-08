@@ -104,7 +104,7 @@ define('when.map-test', function (require) {
 			).ensure(done);
 		},
 
-		'should propagate progress': function(done) {
+		'//should propagate progress': function(done) {
 			var input = [1, 2, 3];
 
 			when.map(input, function(x) {

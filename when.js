@@ -9,7 +9,7 @@
  *
  * @author Brian Cavalier
  * @author John Hann
- * @version 2.2.1
+ * @version 2.3.0
  */
 (function(define) { 'use strict';
 define(function (require) {
@@ -113,6 +113,16 @@ define(function (require) {
 				return this.then(function() {
 					return value;
 				});
+			},
+
+			/**
+			 * Runs a side effect when this promise fulfills, without changing the
+			 * fulfillment value.
+			 * @param {function} onFulfilledSideEffect
+			 * @returns {Promise}
+			 */
+			tap: function(onFulfilledSideEffect) {
+				return this.then(onFulfilledSideEffect)['yield'](this);
 			},
 
 			/**

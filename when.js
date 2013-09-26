@@ -73,11 +73,11 @@ define(function (require) {
 			promiseReject(e);
 		}
 
-		function _when(onFulfilled, onRejected, onProgress, resolve) {
+		function _when(onFulfilled, onRejected, onProgress, resolve, notify) {
 			handlers ? handlers.push(deliver) : enqueue(function() { deliver(value); });
 
 			function deliver(p) {
-				p.when(onFulfilled, onRejected, onProgress, resolve);
+				p.when(onFulfilled, onRejected, onProgress, resolve, notify);
 			}
 		}
 
@@ -135,9 +135,9 @@ define(function (require) {
 		 */
 		then: function(onFulfilled, onRejected, onProgress) {
 			/*jshint unused:false*/
-			var when = this.when;
-			return new Promise(function(resolve) {
-				when(onFulfilled, onRejected, onProgress, resolve);
+			var self = this;
+			return new Promise(function(resolve, reject, notify) {
+				self.when(onFulfilled, onRejected, onProgress, resolve, notify);
 			}, this._status && this._status.observed());
 		},
 
@@ -218,6 +218,65 @@ define(function (require) {
 	};
 
 	/**
+	 * Creates a new promise whose fate is determined by resolver.
+	 * @param {function} resolver function(resolve, reject, notify)
+	 * @returns {Promise} promise whose fate is determine by resolver
+	 */
+	function promise(resolver) {
+		return new Promise(resolver,
+			monitorApi.PromiseStatus && monitorApi.PromiseStatus());
+	}
+
+	function FulfilledPromise(value) {
+		this.value = value;
+	}
+
+	FulfilledPromise.prototype = Object.create(Promise.prototype);
+	FulfilledPromise.prototype.when = function(onFulfilled, _, __, resolve) {
+		try {
+			resolve(typeof onFulfilled === 'function'
+				? coerce(onFulfilled(this.value)) : this);
+		} catch (e) {
+			resolve(new RejectedPromise(e));
+		}
+	};
+	FulfilledPromise.prototype.inspect = function() {
+		return toFulfilledState(this.value);
+	};
+
+	function RejectedPromise(reason) {
+		this.value = reason;
+	}
+
+	RejectedPromise.prototype = Object.create(Promise.prototype);
+	RejectedPromise.prototype.when = function(_, onRejected, __, resolve) {
+		try {
+			resolve(typeof onRejected === 'function'
+				? coerce(onRejected(this.value)) : this);
+		} catch (e) {
+			resolve(new RejectedPromise(e));
+		}
+	};
+
+	RejectedPromise.prototype.inspect = function() {
+		return toRejectedState(this.value);
+	};
+
+	function ProgressingPromise(value) {
+		this.value = value;
+	}
+
+	ProgressingPromise.prototype = Object.create(Promise.prototype);
+	ProgressingPromise.prototype.when = function(_, __, onProgress, ___, notify) {
+		try {
+			notify(typeof onProgress === 'function'
+				? onProgress(this.value) : this.value);
+		} catch (e) {
+			notify(e);
+		}
+	};
+
+	/**
 	 * Returns a resolved promise. The returned promise will be
 	 *  - fulfilled with promiseOrValue if it is a value, or
 	 *  - if promiseOrValue is a promise
@@ -274,7 +333,7 @@ define(function (require) {
 			resolver: { resolve: undef, reject: undef, notify: undef }
 		};
 
-		deferred.promise = pending = new Promise(makeDeferred);
+		deferred.promise = pending = promise(makeDeferred);
 
 		return deferred;
 
@@ -303,64 +362,6 @@ define(function (require) {
 			};
 		}
 	}
-
-	/**
-	 * Creates a new promise whose fate is determined by resolver.
-	 * @param {function} resolver function(resolve, reject, notify)
-	 * @returns {Promise} promise whose fate is determine by resolver
-	 */
-	function promise(resolver) {
-		return new Promise(resolver);
-	}
-
-	function FulfilledPromise(value) {
-		this.value = value;
-	}
-
-	FulfilledPromise.prototype = Object.create(Promise.prototype);
-	FulfilledPromise.prototype.when = function(onFulfilled, _, __, resolve) {
-		try {
-			resolve(typeof onFulfilled === 'function'
-				? onFulfilled(this.value) : this.value);
-		} catch (e) {
-			resolve(new RejectedPromise(e));
-		}
-	};
-	FulfilledPromise.prototype.inspect = function() {
-		return toFulfilledState(this.value);
-	};
-
-	function RejectedPromise(reason) {
-		this.value = reason;
-	}
-
-	RejectedPromise.prototype = Object.create(Promise.prototype);
-	RejectedPromise.prototype.when = function(_, onRejected, __, resolve) {
-		try {
-			resolve(typeof onRejected === 'function'
-				? onRejected(this.value) : this);
-		} catch (e) {
-			resolve(new RejectedPromise(e));
-		}
-	};
-
-	RejectedPromise.prototype.inspect = function() {
-		return toRejectedState(this.value);
-	};
-
-	function ProgressingPromise(value) {
-		this.value = value;
-	}
-
-	ProgressingPromise.prototype = Object.create(Promise.prototype);
-	ProgressingPromise.prototype.when = function(_, __, onProgress, resolve) {
-		try {
-			resolve(typeof onProgress == 'function'
-				? onProgress(this.value) : this.value);
-		} catch (e) {
-			resolve(e);
-		}
-	};
 
 	/**
 	 * Coerces x to a trusted Promise
@@ -418,8 +419,12 @@ define(function (require) {
 	function updateStatus(value, status) {
 		value.then(statusFulfilled, statusRejected);
 
-		function statusFulfilled() { status.fulfilled(); }
-		function statusRejected(r) { status.rejected(r); }
+		function statusFulfilled() {
+			status.fulfilled();
+		}
+		function statusRejected(r) {
+			status.rejected(r);
+		}
 	}
 
 	/**
@@ -737,8 +742,6 @@ define(function (require) {
 		while(task = q[i++]) {
 			task();
 		}
-
-//		handlerQueue = [];
 	}
 
 	// capture setTimeout to avoid being caught by fake timers

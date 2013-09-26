@@ -55,21 +55,72 @@ define(function (require) {
 		return resolve(promiseOrValue).then(onFulfilled, onRejected, onProgress);
 	}
 
-	/**
-	 * Trusted Promise constructor.  A Promise created from this constructor is
-	 * a trusted when.js promise.  Any other duck-typed promise is considered
-	 * untrusted.
-	 * @constructor
-	 * @param {function} sendMessage function to deliver messages to the promise's handler
-	 * @param {function?} inspect function that reports the promise's state
-	 * @name Promise
-	 */
-	function Promise(sendMessage, inspect) {
-		this._message = sendMessage;
-		this.inspect = inspect;
+	function Promise(resolver, status) {
+		var value, handlers = [];
+
+		this.when = function(onFulfilled, onRejected, resolve) {
+			handlers ? handlers.push(deliver) : enqueue(function() { deliver(value); });
+
+			function deliver(p) {
+				p.when(onFulfilled, onRejected, resolve);
+			}
+		};
+
+		/**
+		 * Returns a snapshot of the promise's state at the instant inspect()
+		 * is called. The returned object is not live and will not update as
+		 * the promise's state changes.
+		 * @returns {{ state:String, value?:*, reason?:* }} status snapshot
+		 *  of the promise.
+		 */
+		this.inspect = function() {
+			return value ? value.inspect() : toPendingState();
+		};
+
+		if(status) {
+			this._status = status;
+		}
+
+		// Call the resolver to seal the promise's fate
+		try {
+			resolver(promiseResolve, promiseReject, promiseNotify);
+		} catch(e) {
+			promiseReject(e);
+		}
+
+		// Reject with reason verbatim
+		function promiseReject(reason) {
+			promiseResolve(new RejectedPromise(reason));
+		}
+
+		// Resolve with a value, promise, or thenable
+		function promiseResolve(x) {
+			if(!handlers) {
+				return;
+			}
+
+			value = coerce(x);
+			scheduleConsumers(handlers, value);
+			handlers = undef;
+
+			if(status) {
+				updateStatus(value, status);
+			}
+		}
+
+		/**
+		 * Issue a progress event, notifying all progress listeners
+		 * @param {*} update progress event payload to pass to all listeners
+		 */
+		function promiseNotify(update) {
+//			if(handlers) {
+//				scheduleConsumers(handlers, new ProgressingPromise(update));
+//			}
+		}
 	}
 
 	Promise.prototype = {
+		constructor: Promise,
 		/**
 		 * Register handlers for this promise.
 		 * @param [onFulfilled] {Function} fulfillment handler
@@ -79,14 +130,10 @@ define(function (require) {
 		 */
 		then: function(onFulfilled, onRejected, onProgress) {
 			/*jshint unused:false*/
-			var args, sendMessage;
-
-			args = arguments;
-			sendMessage = this._message;
-
-			return _promise(function(resolve, reject, notify) {
-				sendMessage('when', args, resolve, notify);
-			}, this._status && this._status.observed());
+			var when = this.when;
+			return new Promise(function(resolve) {
+				when(onFulfilled, onRejected, resolve);
+			});
 		},
 
 		/**
@@ -191,7 +238,9 @@ define(function (require) {
 	 * @return {Promise} rejected {@link Promise}
 	 */
 	function reject(promiseOrValue) {
-		return when(promiseOrValue, rejected);
+		return when(promiseOrValue, function(e) {
+			return new RejectedPromise(e);
+		});
 	}
 
 	/**
@@ -236,7 +285,7 @@ define(function (require) {
 
 			deferred.reject  = deferred.resolver.reject  = function(reason) {
 				if(resolved) {
-					return resolve(rejected(reason));
+					return resolve(new RejectedPromise(reason));
 				}
 				resolved = true;
 				rejectPending(reason);
@@ -256,159 +305,57 @@ define(function (require) {
 	 * @returns {Promise} promise whose fate is determine by resolver
 	 */
 	function promise(resolver) {
-		return _promise(resolver, monitorApi.PromiseStatus && monitorApi.PromiseStatus());
+		return new Promise(resolver);
 	}
 
-	/**
-	 * Creates a new promise, linked to parent, whose fate is determined
-	 * by resolver.
-	 * @param {function} resolver function(resolve, reject, notify)
-	 * @param {Promise?} status promise from which the new promise is begotten
-	 * @returns {Promise} promise whose fate is determine by resolver
-	 * @private
-	 */
-	function _promise(resolver, status) {
-		var self, value, consumers = [];
+	function FulfilledPromise(value) {
+		this.value = value;
+	}
 
-		self = new Promise(_message, inspect);
-		self._status = status;
-
-		// Call the provider resolver to seal the promise's fate
+	FulfilledPromise.prototype = Object.create(Promise.prototype);
+	FulfilledPromise.prototype.when = function(onFulfilled, _, resolve) {
 		try {
-			resolver(promiseResolve, promiseReject, promiseNotify);
-		} catch(e) {
-			promiseReject(e);
+			resolve(typeof onFulfilled === 'function'
+				? onFulfilled(this.value) : this.value);
+		} catch (e) {
+			resolve(new RejectedPromise(e));
 		}
+	};
+	FulfilledPromise.prototype.inspect = function() {
+		return toFulfilledState(this.value);
+	};
 
-		// Return the promise
-		return self;
-
-		/**
-		 * Private message delivery. Queues and delivers messages to
-		 * the promise's ultimate fulfillment value or rejection reason.
-		 * @private
-		 * @param {String} type
-		 * @param {Array} args
-		 * @param {Function} resolve
-		 * @param {Function} notify
-		 */
-		function _message(type, args, resolve, notify) {
-			consumers ? consumers.push(deliver) : enqueue(function() { deliver(value); });
-
-			function deliver(p) {
-				p._message(type, args, resolve, notify);
-			}
-		}
-
-		/**
-		 * Returns a snapshot of the promise's state at the instant inspect()
-		 * is called. The returned object is not live and will not update as
-		 * the promise's state changes.
-		 * @returns {{ state:String, value?:*, reason?:* }} status snapshot
-		 *  of the promise.
-		 */
-		function inspect() {
-			return value ? value.inspect() : toPendingState();
-		}
-
-		/**
-		 * Transition from pre-resolution state to post-resolution state, notifying
-		 * all listeners of the ultimate fulfillment or rejection
-		 * @param {*|Promise} val resolution value
-		 */
-		function promiseResolve(val) {
-			if(!consumers) {
-				return;
-			}
-
-			value = coerce(val);
-			scheduleConsumers(consumers, value);
-			consumers = undef;
-
-			if(status) {
-				updateStatus(value, status);
-			}
-		}
-
-		/**
-		 * Reject this promise with the supplied reason, which will be used verbatim.
-		 * @param {*} reason reason for the rejection
-		 */
-		function promiseReject(reason) {
-			promiseResolve(rejected(reason));
-		}
-
-		/**
-		 * Issue a progress event, notifying all progress listeners
-		 * @param {*} update progress event payload to pass to all listeners
-		 */
-		function promiseNotify(update) {
-			if(consumers) {
-				scheduleConsumers(consumers, progressed(update));
-			}
-		}
+	function RejectedPromise(reason) {
+		this.value = reason;
 	}
 
-	/**
-	 * Creates a fulfilled, local promise as a proxy for a value
-	 * NOTE: must never be exposed
-	 * @param {*} value fulfillment value
-	 * @returns {Promise}
-	 */
-	function fulfilled(value) {
-		return near(
-			new NearFulfilledProxy(value),
-			function() { return toFulfilledState(value); }
-		);
+	RejectedPromise.prototype = Object.create(Promise.prototype);
+	RejectedPromise.prototype.when = function(_, onRejected, resolve) {
+		try {
+			resolve(typeof onRejected === 'function'
+				? onRejected(this.value) : this);
+		} catch (e) {
+			resolve(new RejectedPromise(e));
+		}
+	};
+
+	RejectedPromise.prototype.inspect = function() {
+		return toRejectedState(this.value);
+	};
+
+	function ProgressingPromise(value) {
+		this.value = value;
 	}
 
-	/**
-	 * Creates a rejected, local promise with the supplied reason
-	 * NOTE: must never be exposed
-	 * @param {*} reason rejection reason
-	 * @returns {Promise}
-	 */
-	function rejected(reason) {
-		return near(
-			new NearRejectedProxy(reason),
-			function() { return toRejectedState(reason); }
-		);
-	}
-
-	/**
-	 * Creates a near promise using the provided proxy
-	 * NOTE: must never be exposed
-	 * @param {object} proxy proxy for the promise's ultimate value or reason
-	 * @param {function} inspect function that returns a snapshot of the
-	 *  returned near promise's state
-	 * @returns {Promise}
-	 */
-	function near(proxy, inspect) {
-		return new Promise(function (type, args, resolve) {
-			try {
-				resolve(proxy[type].apply(proxy, args));
-			} catch(e) {
-				resolve(rejected(e));
-			}
-		}, inspect);
-	}
-
-	/**
-	 * Create a progress promise with the supplied update.
-	 * @private
-	 * @param {*} update
-	 * @return {Promise} progress promise
-	 */
-	function progressed(update) {
-		return new Promise(function (type, args, _, notify) {
-			var onProgress = args[2];
-			try {
-				notify(typeof onProgress === 'function' ? onProgress(update) : update);
-			} catch(e) {
-				notify(e);
-			}
-		});
-	}
+	ProgressingPromise.prototype = Object.create(Promise.prototype);
+	ProgressingPromise.prototype.when = function(_, __, onProgress, resolve) {
+		try {
+			resolve(typeof onProgress == 'function'
+				? onProgress(this.value) : this.value);
+		} catch (e) {
+			resolve(e);
+		}
+	};
 
 	/**
 	 * Coerces x to a trusted Promise
@@ -422,65 +369,30 @@ define(function (require) {
 	 *   * x if it's a value
 	 */
 	function coerce(x) {
-		if (x instanceof Promise) {
+		if(x instanceof Promise) {
 			return x;
 		}
 
 		if (!(x === Object(x) && 'then' in x)) {
-			return fulfilled(x);
+			return new FulfilledPromise(x);
 		}
 
-		return promise(function(resolve, reject, notify) {
+		return new Promise(function(resolve, reject) {
 			enqueue(function() {
 				try {
-					// We must check and assimilate in the same tick, but not the
-					// current tick, careful only to access promiseOrValue.then once.
 					var untrustedThen = x.then;
 
 					if(typeof untrustedThen === 'function') {
-						fcall(untrustedThen, x, resolve, reject, notify);
+						fcall(untrustedThen, x, resolve, reject);
 					} else {
-						// It's a value, create a fulfilled wrapper
-						resolve(fulfilled(x));
+						resolve(new FulfilledPromise(x));
 					}
-
 				} catch(e) {
-					// Something went wrong, reject
 					reject(e);
 				}
 			});
 		});
 	}
-
-	/**
-	 * Proxy for a near, fulfilled value
-	 * @param {*} value
-	 * @constructor
-	 */
-	function NearFulfilledProxy(value) {
-		this.value = value;
-	}
-
-	NearFulfilledProxy.prototype.when = function(onResult) {
-		return typeof onResult === 'function' ? onResult(this.value) : this.value;
-	};
-
-	/**
-	 * Proxy for a near rejection
-	 * @param {*} reason
-	 * @constructor
-	 */
-	function NearRejectedProxy(reason) {
-		this.reason = reason;
-	}
-
-	NearRejectedProxy.prototype.when = function(_, onError) {
-		if(typeof onError === 'function') {
-			return onError(this.reason);
-		} else {
-			throw this.reason;
-		}
-	};
 
 	/**
 	 * Schedule a task that will process a list of handlers
@@ -674,7 +586,7 @@ define(function (require) {
 	function _map(array, mapFunc, fallback) {
 		return when(array, function(array) {
 
-			return _promise(resolveMap);
+			return new Promise(resolveMap);
 
 			function resolveMap(resolve, reject, notify) {
 				var results, len, toResolve, i;

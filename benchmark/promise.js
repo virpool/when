@@ -52,6 +52,7 @@ define(function(require) {
 	//
 
 	function createPending() {
+//		new when.Promise(pendingForever);
 		when.promise(pendingForever);
 	}
 

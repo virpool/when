@@ -17,6 +17,7 @@ define(function (require) {
 	// Public API
 
 	when.promise   = promise;    // Create a pending promise
+	when.Promise   = Promise;
 	when.resolve   = resolve;    // Create a resolved promise
 	when.reject    = reject;     // Create a rejected promise
 	when.defer     = defer;      // Create a {promise, resolver} pair
@@ -58,24 +59,8 @@ define(function (require) {
 	function Promise(resolver, status) {
 		var value, handlers = [];
 
-		this.when = function(onFulfilled, onRejected, resolve) {
-			handlers ? handlers.push(deliver) : enqueue(function() { deliver(value); });
-
-			function deliver(p) {
-				p.when(onFulfilled, onRejected, resolve);
-			}
-		};
-
-		/**
-		 * Returns a snapshot of the promise's state at the instant inspect()
-		 * is called. The returned object is not live and will not update as
-		 * the promise's state changes.
-		 * @returns {{ state:String, value?:*, reason?:* }} status snapshot
-		 *  of the promise.
-		 */
-		this.inspect = function() {
-			return value ? value.inspect() : toPendingState();
-		};
+		this.when = _when;
+		this.inspect = inspect;
 
 		if(status) {
 			this._status = status;
@@ -87,6 +72,26 @@ define(function (require) {
 		} catch(e) {
 			promiseReject(e);
 		}
+
+		function _when(onFulfilled, onRejected, onProgress, resolve) {
+			handlers ? handlers.push(deliver) : enqueue(function() { deliver(value); });
+
+			function deliver(p) {
+				p.when(onFulfilled, onRejected, onProgress, resolve);
+			}
+		}
+
+		/**
+		 * Returns a snapshot of the promise's state at the instant inspect()
+		 * is called. The returned object is not live and will not update as
+		 * the promise's state changes.
+		 * @returns {{ state:String, value?:*, reason?:* }} status snapshot
+		 *  of the promise.
+		 */
+		function inspect() {
+			return value ? value.inspect() : toPendingState();
+		}
+
 
 		// Reject with reason verbatim
 		function promiseReject(reason) {
@@ -113,9 +118,9 @@ define(function (require) {
 		 * @param {*} update progress event payload to pass to all listeners
 		 */
 		function promiseNotify(update) {
-//			if(handlers) {
-//				scheduleConsumers(handlers, new ProgressingPromise(update));
-//			}
+			if(handlers) {
+				scheduleConsumers(handlers, new ProgressingPromise(update));
+			}
 		}
 	}
 
@@ -132,8 +137,8 @@ define(function (require) {
 			/*jshint unused:false*/
 			var when = this.when;
 			return new Promise(function(resolve) {
-				when(onFulfilled, onRejected, resolve);
-			});
+				when(onFulfilled, onRejected, onProgress, resolve);
+			}, this._status && this._status.observed());
 		},
 
 		/**
@@ -269,7 +274,7 @@ define(function (require) {
 			resolver: { resolve: undef, reject: undef, notify: undef }
 		};
 
-		deferred.promise = pending = promise(makeDeferred);
+		deferred.promise = pending = new Promise(makeDeferred);
 
 		return deferred;
 
@@ -313,7 +318,7 @@ define(function (require) {
 	}
 
 	FulfilledPromise.prototype = Object.create(Promise.prototype);
-	FulfilledPromise.prototype.when = function(onFulfilled, _, resolve) {
+	FulfilledPromise.prototype.when = function(onFulfilled, _, __, resolve) {
 		try {
 			resolve(typeof onFulfilled === 'function'
 				? onFulfilled(this.value) : this.value);
@@ -330,7 +335,7 @@ define(function (require) {
 	}
 
 	RejectedPromise.prototype = Object.create(Promise.prototype);
-	RejectedPromise.prototype.when = function(_, onRejected, resolve) {
+	RejectedPromise.prototype.when = function(_, onRejected, __, resolve) {
 		try {
 			resolve(typeof onRejected === 'function'
 				? onRejected(this.value) : this);
@@ -726,13 +731,14 @@ define(function (require) {
 	 * processing until it is truly empty.
 	 */
 	function drainQueue() {
-		var task, i = 0;
+		var task, i = 0, q = handlerQueue;
+		handlerQueue = [];
 
-		while(task = handlerQueue[i++]) {
+		while(task = q[i++]) {
 			task();
 		}
 
-		handlerQueue = [];
+//		handlerQueue = [];
 	}
 
 	// capture setTimeout to avoid being caught by fake timers

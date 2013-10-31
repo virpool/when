@@ -263,8 +263,10 @@ define('when.defer-test', function (require) {
 				)
 				.then(fail, fail,
 					function(update) {
-						assert.same(update, sentinel);
-						done();
+						update.then(null, function(update) {
+							assert.same(update, sentinel);
+							done();
+						});
 					}
 				);
 

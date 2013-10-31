@@ -122,8 +122,19 @@ define(function (require) {
 			}
 		},
 
-		done: function(handleResult, handleFatalError) {
-			this.then(handleResult, handleFatalError).otherwise(crash);
+		done: function(handleResult, handleFatalError, onProgress) {
+			this.then(handleResult, handleFatalError, handleProgress).otherwise(crash);
+
+			function handleProgress(x) {
+				if(typeof onProgress === 'function') {
+					try {
+						x = onProgress(x);
+					} catch(e) {
+						x = reject(e);
+					}
+				}
+				cast(x).otherwise(crash);
+			}
 		},
 
 		/**
@@ -432,7 +443,7 @@ define(function (require) {
 			try {
 				notify(typeof onProgress === 'function' ? onProgress(update) : update);
 			} catch(e) {
-				notify(e);
+				notify(rejected(e));
 			}
 		});
 	}

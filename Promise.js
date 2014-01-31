@@ -1,18 +1,9 @@
 /** @license MIT License (c) copyright 2011-2013 original author or authors */
+/** @author Brian Cavalier */
+/** @author John Hann */
 
-/**
- * Licensed under the MIT License at:
- * http://www.opensource.org/licenses/mit-license.php
- *
- * @author Brian Cavalier
- * @author John Hann
- */
 (function(define) { 'use strict';
 define(function (require) {
-
-	var makePromise = require('./lib/makePromise');
-	var Scheduler = require('./lib/scheduler');
-	var timer = require('./lib/timer');
 
 	var array = require('./lib/array');
 	var flow = require('./lib/flow');
@@ -22,10 +13,9 @@ define(function (require) {
 	var monad = require('./lib/monad');
 	var progress = require('./lib/progress');
 	var timed = require('./lib/timed');
+	var timer = require('./lib/timer');
 
-	var Promise = makePromise({
-		scheduler: Scheduler.createDefault()
-	});
+	var Promise = require('./es6');
 
 	return [array, flow, semigroup, foldable, generate, monad, progress]
 		.reduceRight(function(Promise, feature) {

@@ -13,11 +13,18 @@
 (function(define) {
 define(function(require) {
 
-	var when, slice, setTimer, cjsRequire, vertxSetTimer;
+	var when, slice, setTimer, cjsRequire, vertxSetTimer, own, beget;
 
 	when = require('../when');
-	slice = [].slice;
+	slice = Array.prototype.slice;
+	own = Object.prototype.hasOwnProperty;
 	cjsRequire = require;
+
+	beget = Object.create || function beget(x) {
+		function F() {}
+		F.prototype = x;
+		return new F();
+	};
 
 	try {
 		vertxSetTimer = cjsRequire('vertx').setTimer;
@@ -30,6 +37,7 @@ define(function(require) {
 		apply: apply,
 		call: call,
 		lift: lift,
+		liftAll: liftAll,
 		bind: lift, // DEPRECATED alias for lift
 		createCallback: createCallback,
 		bindCallback: bindCallback,
@@ -152,6 +160,38 @@ define(function(require) {
 	}
 
 	/**
+	 * Lift all the methods of a host object
+	 * @param {object} host
+	 * @returns {object}
+	 */
+	function liftAll(host, namer) {
+		var key, f, lifted;
+
+		if(typeof namer !== 'function') {
+			namer = namer === false ? identity : defaultNamer;
+		}
+
+		lifted = beget(host);
+
+		for(key in host) {
+			if(own.call(host, key)
+				&& typeof host[key] === 'function'
+				&& !host[key].__isPromisified__) {
+
+				f = lift(host[key]);
+				f.__isPromisified__ = true;
+				lifted[namer(key)] = f;
+			}
+		}
+
+		return lifted;
+	}
+
+	function defaultNamer(name) {
+		return name + 'Async';
+	}
+
+	/**
 	 * Takes an object that responds to the resolver interface, and returns
 	 * a function that will resolve or reject it depending on how it is called.
 	 *
@@ -254,6 +294,10 @@ define(function(require) {
 		return function(promise) {
 			return bindCallback(promise, callback);
 		};
+	}
+
+	function identity(x) {
+		return x;
 	}
 });
 

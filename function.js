@@ -61,8 +61,8 @@ define(function(require) {
 		};
 	}
 
-	function liftAll(targetObj, namer) {
-		return _liftAll(targetObj, lift, namer);
+	function liftAll(src, combine, dst) {
+		return _liftAll(lift, combine, dst, src);
 	}
 
 	/**

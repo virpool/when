@@ -15,7 +15,8 @@ define(function(require) {
 
 	return {
 		all: when.lift(all),
-		map: map
+		map: map,
+		traverse: traverse
 	};
 
 	/**
@@ -62,6 +63,16 @@ define(function(require) {
 				o[k] = toPromise(object[k]).then(f);
 				return o;
 			}, {}));
+		});
+	}
+
+	function traverse(tree) {
+		return map(tree, function(v) {
+			if(v != null && typeof v === 'object') {
+				return traverse(v);
+			}
+
+			return v;
 		});
 	}
 
